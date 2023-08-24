@@ -40,11 +40,13 @@ passport.deserializeUser((obj, done) => {
 })
 
 app.use(helmet())
-app.use(cookieSession({
-  name: 'session',
-  maxAge: 24 * 60 * 60 * 1000,
-  keys: [config.COOKIE_KEY_1, config.COOKIE_KEY_2]
-}))
+app.use(
+  cookieSession({
+    name: 'session',
+    maxAge: 24 * 60 * 60 * 1000,
+    keys: [config.COOKIE_KEY_1, config.COOKIE_KEY_2],
+  })
+)
 app.use(passport.initialize())
 app.use(passport.session())
 
@@ -72,7 +74,10 @@ app.get(
   }
 )
 
-app.get('/auth/logout', (req, res) => {})
+app.get('/auth/logout', (req, res) => {
+  req.logOut() // removes req.user and clear the session saved
+  return res.redirect('/')
+})
 
 app.get('/secret', checkLoggedIn, (req, res) => {
   return res.send('Your personal secret value is 8080')
@@ -100,7 +105,7 @@ function verifyCallback(accessToken, refreshToken, profile, done) {
 }
 
 function checkLoggedIn(req, res, next) {
-  const isLogged = true
+  const isLogged = req.isAuthenticated() && req.user
 
   if (!isLogged) {
     return res.status(401).json({ err: 'you must login first' })
