@@ -3,6 +3,9 @@ const path = require('path')
 const https = require('https')
 const helmet = require('helmet')
 const express = require('express')
+const passport = require('passport')
+const cookieSession = require('cookie-session')
+const { Strategy } = require('passport-google-oauth20')
 
 require('dotenv').config()
 
@@ -11,25 +14,72 @@ const PORT = 3000 || env.PORT
 const config = {
   CLIENT_ID: process.env.CLIENT_ID,
   CLIENT_SECRET: process.env.CLIENT_SECRET,
+  COOKIE_KEY_1: process.env.COOKIE_KEY_1,
+  COOKIE_KEY_2: process.env.COOKIE_KEY_2,
 }
 
 const app = express()
 
+const AUTH_OPTIONS = {
+  callbackURL: '/auth/google/callback',
+  clientID: config.CLIENT_ID,
+  clientSecret: config.CLIENT_SECRET,
+}
+
+passport.use(new Strategy(AUTH_OPTIONS, verifyCallback))
+
+// save session to cookie
+passport.serializeUser((user, done) => {
+  done(null, user)
+})
+
+// read session from cookie
+// sets values to req.user
+passport.deserializeUser((obj, done) => {
+  done(null, obj)
+})
+
 app.use(helmet())
+app.use(cookieSession({
+  name: 'session',
+  maxAge: 24 * 60 * 60 * 1000,
+  keys: [config.COOKIE_KEY_1, config.COOKIE_KEY_2]
+}))
+app.use(passport.initialize())
+app.use(passport.session())
 
 app.get('/', (req, res) => {
-  console.log('hello')
   return res.sendFile(path.join(__dirname, 'public', 'index.html'))
 })
 
-app.get('/auth/google', (req, res) => {})
+app.get(
+  '/auth/google',
+  passport.authenticate('google', {
+    scope: ['email'],
+  })
+)
+passport.authenticate()
 
-app.get('/auth/google/callback', (req, res) => {})
+app.get(
+  '/auth/google/callback',
+  passport.authenticate('google', {
+    failureRedirect: '/failure',
+    successRedirect: '/',
+    session: true,
+  }),
+  function (req, res) {
+    console.log('Google called us back')
+  }
+)
 
 app.get('/auth/logout', (req, res) => {})
 
 app.get('/secret', checkLoggedIn, (req, res) => {
   return res.send('Your personal secret value is 8080')
+})
+
+app.get('/failure', (req, res) => {
+  res.send('failed to login!')
 })
 
 https
@@ -43,6 +93,11 @@ https
   .listen(PORT, () => {
     console.log(`Server listening on ${PORT}`)
   })
+
+function verifyCallback(accessToken, refreshToken, profile, done) {
+  console.log('google Profile', profile)
+  done(null, profile)
+}
 
 function checkLoggedIn(req, res, next) {
   const isLogged = true
